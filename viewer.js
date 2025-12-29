@@ -1,83 +1,60 @@
-const mv = document.getElementById('mv');
-const partSelect = document.getElementById('partSelect');
-const paletteEl = document.getElementById('palette');
-const customColor = document.getElementById('customColor');
-const shareBtn = document.getElementById('share');
+document.addEventListener("DOMContentLoaded", () => {
+  const mv = document.getElementById("mv");
+  const partSelect = document.getElementById("partSelect");
+  const paletteEl = document.getElementById("palette");
+  const colorInput = document.getElementById("customColor");
+  const shareBtn = document.getElementById("share");
 
+  // --- Load GLB from URL ---
+  const params = new URLSearchParams(window.location.search);
+  const glbUrl = params.get("glb");
 
-let selections = {};
-let MATERIAL_MODE = 'materials';
+  if (!glbUrl) {
+    console.warn("No GLB URL provided");
+    return;
+  }
 
+  mv.src = decodeURIComponent(glbUrl);
 
-// --- Read Shopify blog data from URL ---
-// Example:
-// ?glb=https://cdn.shopify.com/...model.glb&colors=Red:#ff0000,Blue:#0044ff
+  // --- When model loads, list materials ---
+  mv.addEventListener("load", async () => {
+    await mv.updateComplete;
 
+    const materials = mv.sceneGraph?.materials || [];
 
-const params = new URLSearchParams(location.search);
-const GLB_URL = params.get('glb');
-const COLORS_RAW = params.get('colors') || 'Primary:#ff0000,Secondary:#00ff00';
+    if (!materials.length) {
+      partSelect.innerHTML = "<option>No materials found</option>";
+      return;
+    }
 
+    partSelect.innerHTML = "";
+    materials.forEach(mat => {
+      const opt = document.createElement("option");
+      opt.value = mat.name;
+      opt.textContent = mat.name;
+      partSelect.appendChild(opt);
+    });
+  });
 
-if (!GLB_URL) {
-document.body.innerHTML = '<h2>Missing GLB URL</h2>';
-throw new Error('No GLB URL');
-}
+  // --- Apply color ---
+  function applyColor(hex) {
+    const name = partSelect.value;
+    const mat = mv.sceneGraph.materials.find(m => m.name === name);
+    if (!mat) return;
 
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
 
-mv.src = GLB_URL;
+    mat.pbrMetallicRoughness.setBaseColorFactor([r, g, b, 1]);
+  }
 
+  colorInput.addEventListener("input", e => applyColor(e.target.value));
 
-// --- Palette ---
-const palette = COLORS_RAW.split(',').map(p => {
-const [label, hex] = p.split(':');
-return { label, hex: hex.startsWith('#') ? hex : `#${hex}` };
+  // --- Share link ---
+  shareBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(window.location.href);
+    shareBtn.textContent = "Copied!";
+    setTimeout(() => (shareBtn.textContent = "Copy Share Link"), 1500);
+  });
 });
-
-
-palette.forEach(c => {
-const sw = document.createElement('div');
-sw.className = 'swatch';
-sw.style.background = c.hex;
-sw.onclick = () => applyColor(c.hex);
-paletteEl.appendChild(sw);
-});
-
-
-// --- SceneGraph ---
-mv.addEventListener('load', async () => {
-await mv.updateComplete;
-const sg = mv.sceneGraph;
-
-
-const mats = sg.materials || [];
-MATERIAL_MODE = mats.length ? 'materials' : 'nodes';
-
-
-const names = MATERIAL_MODE === 'materials'
-? mats.map(m => m.name)
-: sg.model.children.map(n => n.name);
-
-
-partSelect.innerHTML = '';
-names.forEach(n => {
-const o = document.createElement('option');
-o.textContent = o.value = n;
-partSelect.appendChild(o);
-});
-});
-
-
-function applyColor(hex) {
-const part = partSelect.value;
-const sg = mv.sceneGraph;
-const rgba = hexToRGBA(hex);
-
-
-if (MATERIAL_MODE === 'materials') {
-const mat = sg.materials.find(m => m.name === part);
-mat?.pbrMetallicRoughness?.setBaseColorFactor(rgba);
-}
-
-
-};
