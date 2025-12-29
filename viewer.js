@@ -4,57 +4,25 @@ const palette = document.getElementById("palette");
 const customColor = document.getElementById("customColor");
 const shareBtn = document.getElementById("share");
 
-// ---- READ URL PARAMS ----
+// Read URL params
 const params = new URLSearchParams(window.location.search);
-const glbUrl = params.get("glb");
-const colorsParam = params.get("colors");
+const glb = params.get("glb");
 
-// ---- LOAD MODEL ----
-if (!glbUrl) {
-  console.error("No GLB URL provided");
+if (glb) {
+  mv.src = glb;
 } else {
-  console.log("Loading GLB:", glbUrl);
-  mv.src = glbUrl;
+  console.warn("No ?glb= param found");
 }
 
-// ---- COLOR PALETTE ----
-let PALETTE = [
-  { label: "Black", hex: "#000000" },
-  { label: "White", hex: "#ffffff" },
-  { label: "Red", hex: "#ff0000" },
-];
-
-if (colorsParam) {
-  PALETTE = colorsParam.split(",").map(item => {
-    const [label, hex] = item.split(":");
-    return { label, hex: "#" + hex.replace("#", "") };
-  });
-}
-
-// ---- BUILD PALETTE UI ----
-palette.innerHTML = "";
-PALETTE.forEach(c => {
-  const btn = document.createElement("button");
-  btn.style.background = c.hex;
-  btn.className = "swatch";
-  btn.title = c.label;
-  btn.onclick = () => applyColor(c.hex);
-  palette.appendChild(btn);
-});
-
-// ---- WAIT FOR MODEL ----
 mv.addEventListener("load", async () => {
   await mv.updateComplete;
-
   const sg = mv.sceneGraph;
-  console.log("SceneGraph:", sg);
 
-  if (!sg || !sg.materials || sg.materials.length === 0) {
-    console.error("No materials found in model");
+  if (!sg || !sg.materials?.length) {
+    console.error("No materials found in sceneGraph");
     return;
   }
 
-  // Populate part dropdown
   partSelect.innerHTML = "";
   sg.materials.forEach(mat => {
     const opt = document.createElement("option");
@@ -62,34 +30,46 @@ mv.addEventListener("load", async () => {
     opt.textContent = mat.name;
     partSelect.appendChild(opt);
   });
+
+  buildPalette(["#ff0000", "#00ff00", "#0000ff", "#ffffff", "#000000"]);
 });
 
-// ---- APPLY COLOR ----
-function applyColor(hex) {
-  const matName = partSelect.value;
-  if (!matName) return;
+function buildPalette(colors) {
+  palette.innerHTML = "";
+  colors.forEach(hex => {
+    const btn = document.createElement("button");
+    btn.style.background = hex;
+    btn.style.width = "28px";
+    btn.style.height = "28px";
+    btn.onclick = () => applyColor(hex);
+    palette.appendChild(btn);
+  });
+}
 
-  const mat = mv.sceneGraph.materials.find(m => m.name === matName);
+function applyColor(hex) {
+  const name = partSelect.value;
+  if (!name) return;
+
+  const mat = mv.sceneGraph.materials.find(m => m.name === name);
   if (!mat) return;
 
   const rgb = hexToRGBA(hex);
   mat.pbrMetallicRoughness.setBaseColorFactor(rgb);
 }
 
-// ---- SHARE LINK ----
-shareBtn.onclick = () => {
-  navigator.clipboard.writeText(window.location.href);
-  shareBtn.textContent = "Copied!";
-  setTimeout(() => (shareBtn.textContent = "Copy Share Link"), 1500);
-};
-
-// ---- HELPERS ----
 function hexToRGBA(hex) {
   const h = hex.replace("#", "");
   return [
-    parseInt(h.slice(0, 2), 16) / 255,
-    parseInt(h.slice(2, 4), 16) / 255,
-    parseInt(h.slice(4, 6), 16) / 255,
-    1,
+    parseInt(h.substring(0,2),16)/255,
+    parseInt(h.substring(2,4),16)/255,
+    parseInt(h.substring(4,6),16)/255,
+    1
   ];
 }
+
+shareBtn.onclick = () => {
+  const url = new URL(window.location.href);
+  navigator.clipboard.writeText(url.toString());
+  alert("Link copied!");
+};
+
