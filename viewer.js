@@ -1,102 +1,151 @@
 const mv = document.getElementById("mv");
 const partSelect = document.getElementById("partSelect");
-const palette = document.getElementById("palette");
+const paletteEl = document.getElementById("palette");
 const customColor = document.getElementById("customColor");
 const shareBtn = document.getElementById("share");
 
-// --- Load GLB from URL ---
+const DEFAULT_COLORS = ["#ff0000", "#00ff00", "#0000ff", "#ffffff", "#000000"];
+const selections = {};
+
+// --------------------------------------------------
+// Load model from URL
+// --------------------------------------------------
 const params = new URLSearchParams(window.location.search);
 const glbUrl = params.get("glb");
 
-if (!glbUrl) {
-  alert("No GLB URL provided");
-} else {
+if (glbUrl) {
   mv.src = glbUrl;
 }
 
-// --- Hardcoded palette (for now) ---
-const COLORS = ["#ff0000", "#00ff00", "#0000ff", "#ffffff", "#000000"];
-
-// --- Track selections ---
-const selections = {};
-
-// --- Wait for model-viewer to fully load ---
+// --------------------------------------------------
+// WAIT FOR SCENEGRAPH (THIS IS CRITICAL)
+// --------------------------------------------------
 mv.addEventListener("load", async () => {
   await mv.updateComplete;
+  console.log("Model loaded, scanning materials...");
+  populateParts();
+});
 
+// --------------------------------------------------
+// Extract materials properly
+// --------------------------------------------------
+function populateParts() {
   const sg = mv.sceneGraph;
-
-  if (!sg || !sg.materials || sg.materials.length === 0) {
-    console.error("SceneGraph has no materials", sg);
-    alert("No materials detected in model");
+  if (!sg) {
+    console.error("SceneGraph missing");
     return;
   }
 
-  console.log("Materials found:", sg.materials);
+  const materials = new Map();
 
-  // Populate part dropdown
+  sg.model.traverse((node) => {
+    if (!node.material) return;
+
+    const mats = Array.isArray(node.material)
+      ? node.material
+      : [node.material];
+
+    mats.forEach((mat) => {
+      if (mat.name) {
+        materials.set(mat.name, mat);
+      }
+    });
+  });
+
+  if (!materials.size) {
+    partSelect.innerHTML = `<option>No materials detected</option>`;
+    console.error("No materials found in sceneGraph traversal");
+    return;
+  }
+
   partSelect.innerHTML = "";
-  sg.materials.forEach(mat => {
-    if (!mat.name) return;
+  materials.forEach((_, name) => {
     const opt = document.createElement("option");
-    opt.value = mat.name;
-    opt.textContent = mat.name;
+    opt.value = name;
+    opt.textContent = name;
     partSelect.appendChild(opt);
   });
 
-  // Build palette
-  palette.innerHTML = "";
-  COLORS.forEach(hex => {
-    const sw = document.createElement("button");
-    sw.style.background = hex;
-    sw.style.width = "30px";
-    sw.style.height = "30px";
-    sw.style.margin = "4px";
-    sw.onclick = () => applyColor(hex);
-    palette.appendChild(sw);
-  });
-});
-
-// --- Apply color ---
-function applyColor(hex) {
-  const part = partSelect.value;
-  if (!part) return;
-
-  const mat = mv.sceneGraph.materials.find(m => m.name === part);
-  if (!mat) {
-    console.error("Material not found:", part);
-    return;
-  }
-
-  const rgba = hexToRGBA(hex);
-  mat.pbrMetallicRoughness.setBaseColorFactor(rgba);
-  selections[part] = hex;
+  renderPalette(materials);
 }
 
-// --- Custom color ---
-customColor.addEventListener("input", e => {
-  applyColor(e.target.value);
-});
+// --------------------------------------------------
+// Palette UI
+// --------------------------------------------------
+function renderPalette(materials) {
+  paletteEl.innerHTML = "";
 
-// --- Share link ---
+  DEFAULT_COLORS.forEach((hex) => {
+    const btn = document.createElement("button");
+    btn.style.background = hex;
+    btn.style.width = "28px";
+    btn.style.height = "28px";
+    btn.style.borderRadius = "6px";
+    btn.style.border = "1px solid #999";
+    btn.style.cursor = "pointer";
+
+    btn.onclick = () => {
+      applyColor(partSelect.value, hex, materials);
+    };
+
+    paletteEl.appendChild(btn);
+  });
+
+  customColor.onchange = () => {
+    applyColor(partSelect.value, customColor.value, materials);
+  };
+}
+
+// --------------------------------------------------
+// Apply color (THIS is the magic)
+// --------------------------------------------------
+function applyColor(partName, hex, materials) {
+  const sg = mv.sceneGraph;
+  if (!sg) return;
+
+  const rgb = hexToRGB(hex);
+
+  sg.model.traverse((node) => {
+    if (!node.material) return;
+
+    const mats = Array.isArray(node.material)
+      ? node.material
+      : [node.material];
+
+    mats.forEach((mat) => {
+      if (mat.name === partName && mat.pbrMetallicRoughness) {
+        mat.pbrMetallicRoughness.setBaseColorFactor([...rgb, 1]);
+      }
+    });
+  });
+
+  selections[partName] = hex;
+}
+
+// --------------------------------------------------
+// Share link
+// --------------------------------------------------
 shareBtn.onclick = () => {
   const url = new URL(window.location.href);
+  url.searchParams.set("glb", mv.src);
+
   const parts = Object.entries(selections)
     .map(([k, v]) => `${encodeURIComponent(k)}:${v.replace("#", "")}`)
     .join(",");
+
   if (parts) url.searchParams.set("parts", parts);
+
   navigator.clipboard.writeText(url.toString());
-  alert("Share link copied");
+  alert("Share link copied!");
 };
 
-// --- Utils ---
-function hexToRGBA(hex) {
+// --------------------------------------------------
+function hexToRGB(hex) {
   hex = hex.replace("#", "");
   return [
     parseInt(hex.slice(0, 2), 16) / 255,
     parseInt(hex.slice(2, 4), 16) / 255,
     parseInt(hex.slice(4, 6), 16) / 255,
-    1
   ];
 }
 
