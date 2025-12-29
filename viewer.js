@@ -1,56 +1,42 @@
 const mv = document.getElementById("mv");
 const partSelect = document.getElementById("partSelect");
-const paletteEl = document.getElementById("palette");
+const palette = document.getElementById("palette");
 const customColor = document.getElementById("customColor");
 const shareBtn = document.getElementById("share");
 
+// --- Load GLB from URL ---
 const params = new URLSearchParams(window.location.search);
 const glbUrl = params.get("glb");
 
-// ---- Load model from URL ----
-if (glbUrl) {
-  mv.src = glbUrl;
+if (!glbUrl) {
+  alert("No GLB URL provided");
 } else {
-  console.warn("No ?glb= URL provided");
+  mv.src = glbUrl;
 }
 
-// ---- Palette (example, can be dynamic later) ----
-const PALETTE = [
-  "#ff0000",
-  "#00ff00",
-  "#0000ff",
-  "#000000",
-  "#ffffff"
-];
+// --- Hardcoded palette (for now) ---
+const COLORS = ["#ff0000", "#00ff00", "#0000ff", "#ffffff", "#000000"];
 
-// ---- State ----
+// --- Track selections ---
 const selections = {};
 
-// ---- When model is fully loaded ----
+// --- Wait for model-viewer to fully load ---
 mv.addEventListener("load", async () => {
-  console.log("Model loaded");
   await mv.updateComplete;
 
   const sg = mv.sceneGraph;
 
-  if (!sg) {
-    console.error("SceneGraph not available");
+  if (!sg || !sg.materials || sg.materials.length === 0) {
+    console.error("SceneGraph has no materials", sg);
+    alert("No materials detected in model");
     return;
   }
 
-  console.log("SceneGraph:", sg);
+  console.log("Materials found:", sg.materials);
 
-  // ---- Read materials FIRST (most reliable) ----
-  const materials = sg.materials || [];
-
-  if (!materials.length) {
-    console.warn("No materials found in SceneGraph");
-    return;
-  }
-
-  // ---- Populate part picker ----
+  // Populate part dropdown
   partSelect.innerHTML = "";
-  materials.forEach(mat => {
+  sg.materials.forEach(mat => {
     if (!mat.name) return;
     const opt = document.createElement("option");
     opt.value = mat.name;
@@ -58,61 +44,58 @@ mv.addEventListener("load", async () => {
     partSelect.appendChild(opt);
   });
 
-  console.log("Materials loaded:", materials.map(m => m.name));
-
-  // ---- Build palette UI ----
-  renderPalette();
+  // Build palette
+  palette.innerHTML = "";
+  COLORS.forEach(hex => {
+    const sw = document.createElement("button");
+    sw.style.background = hex;
+    sw.style.width = "30px";
+    sw.style.height = "30px";
+    sw.style.margin = "4px";
+    sw.onclick = () => applyColor(hex);
+    palette.appendChild(sw);
+  });
 });
 
-// ---- Palette UI ----
-function renderPalette() {
-  paletteEl.innerHTML = "";
-  PALETTE.forEach(hex => {
-    const btn = document.createElement("button");
-    btn.style.background = hex;
-    btn.style.width = "28px";
-    btn.style.height = "28px";
-    btn.style.margin = "4px";
-    btn.style.border = "1px solid #ccc";
-    btn.onclick = () => applyColor(hex);
-    paletteEl.appendChild(btn);
-  });
-}
-
-// ---- Apply color ----
+// --- Apply color ---
 function applyColor(hex) {
   const part = partSelect.value;
   if (!part) return;
 
   const mat = mv.sceneGraph.materials.find(m => m.name === part);
-  if (!mat) return;
+  if (!mat) {
+    console.error("Material not found:", part);
+    return;
+  }
 
-  const rgba = hexToRgba(hex);
+  const rgba = hexToRGBA(hex);
   mat.pbrMetallicRoughness.setBaseColorFactor(rgba);
-
   selections[part] = hex;
 }
 
-// ---- Share link ----
+// --- Custom color ---
+customColor.addEventListener("input", e => {
+  applyColor(e.target.value);
+});
+
+// --- Share link ---
 shareBtn.onclick = () => {
   const url = new URL(window.location.href);
-  url.searchParams.set(
-    "parts",
-    Object.entries(selections)
-      .map(([k, v]) => `${encodeURIComponent(k)}:${v.replace("#", "")}`)
-      .join(",")
-  );
+  const parts = Object.entries(selections)
+    .map(([k, v]) => `${encodeURIComponent(k)}:${v.replace("#", "")}`)
+    .join(",");
+  if (parts) url.searchParams.set("parts", parts);
   navigator.clipboard.writeText(url.toString());
-  alert("Share link copied!");
+  alert("Share link copied");
 };
 
-// ---- Helpers ----
-function hexToRgba(hex) {
-  const h = hex.replace("#", "");
+// --- Utils ---
+function hexToRGBA(hex) {
+  hex = hex.replace("#", "");
   return [
-    parseInt(h.slice(0, 2), 16) / 255,
-    parseInt(h.slice(2, 4), 16) / 255,
-    parseInt(h.slice(4, 6), 16) / 255,
+    parseInt(hex.slice(0, 2), 16) / 255,
+    parseInt(hex.slice(2, 4), 16) / 255,
+    parseInt(hex.slice(4, 6), 16) / 255,
     1
   ];
 }
