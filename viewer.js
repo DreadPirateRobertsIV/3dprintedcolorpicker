@@ -81,7 +81,7 @@ shareBtn.addEventListener("click", () => {
   shareBtn.textContent = "Copied!";
 });
 
-const mv = document.getElementById('mv');
+
 
 mv.addEventListener('model-visibility', () => {
   console.log('=== MODEL READY ===');
