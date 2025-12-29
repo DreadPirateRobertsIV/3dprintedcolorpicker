@@ -1,60 +1,95 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const mv = document.getElementById("mv");
-  const partSelect = document.getElementById("partSelect");
-  const paletteEl = document.getElementById("palette");
-  const colorInput = document.getElementById("customColor");
-  const shareBtn = document.getElementById("share");
+const mv = document.getElementById("mv");
+const partSelect = document.getElementById("partSelect");
+const palette = document.getElementById("palette");
+const customColor = document.getElementById("customColor");
+const shareBtn = document.getElementById("share");
 
-  // --- Load GLB from URL ---
-  const params = new URLSearchParams(window.location.search);
-  const glbUrl = params.get("glb");
+// ---- READ URL PARAMS ----
+const params = new URLSearchParams(window.location.search);
+const glbUrl = params.get("glb");
+const colorsParam = params.get("colors");
 
-  if (!glbUrl) {
-    console.warn("No GLB URL provided");
+// ---- LOAD MODEL ----
+if (!glbUrl) {
+  console.error("No GLB URL provided");
+} else {
+  console.log("Loading GLB:", glbUrl);
+  mv.src = glbUrl;
+}
+
+// ---- COLOR PALETTE ----
+let PALETTE = [
+  { label: "Black", hex: "#000000" },
+  { label: "White", hex: "#ffffff" },
+  { label: "Red", hex: "#ff0000" },
+];
+
+if (colorsParam) {
+  PALETTE = colorsParam.split(",").map(item => {
+    const [label, hex] = item.split(":");
+    return { label, hex: "#" + hex.replace("#", "") };
+  });
+}
+
+// ---- BUILD PALETTE UI ----
+palette.innerHTML = "";
+PALETTE.forEach(c => {
+  const btn = document.createElement("button");
+  btn.style.background = c.hex;
+  btn.className = "swatch";
+  btn.title = c.label;
+  btn.onclick = () => applyColor(c.hex);
+  palette.appendChild(btn);
+});
+
+// ---- WAIT FOR MODEL ----
+mv.addEventListener("load", async () => {
+  await mv.updateComplete;
+
+  const sg = mv.sceneGraph;
+  console.log("SceneGraph:", sg);
+
+  if (!sg || !sg.materials || sg.materials.length === 0) {
+    console.error("No materials found in model");
     return;
   }
 
-  mv.src = decodeURIComponent(glbUrl);
-
-  // --- When model loads, list materials ---
-  mv.addEventListener("load", async () => {
-    await mv.updateComplete;
-
-    const materials = mv.sceneGraph?.materials || [];
-
-    if (!materials.length) {
-      partSelect.innerHTML = "<option>No materials found</option>";
-      return;
-    }
-
-    partSelect.innerHTML = "";
-    materials.forEach(mat => {
-      const opt = document.createElement("option");
-      opt.value = mat.name;
-      opt.textContent = mat.name;
-      partSelect.appendChild(opt);
-    });
-  });
-
-  // --- Apply color ---
-  function applyColor(hex) {
-    const name = partSelect.value;
-    const mat = mv.sceneGraph.materials.find(m => m.name === name);
-    if (!mat) return;
-
-    const r = parseInt(hex.slice(1, 3), 16) / 255;
-    const g = parseInt(hex.slice(3, 5), 16) / 255;
-    const b = parseInt(hex.slice(5, 7), 16) / 255;
-
-    mat.pbrMetallicRoughness.setBaseColorFactor([r, g, b, 1]);
-  }
-
-  colorInput.addEventListener("input", e => applyColor(e.target.value));
-
-  // --- Share link ---
-  shareBtn.addEventListener("click", () => {
-    navigator.clipboard.writeText(window.location.href);
-    shareBtn.textContent = "Copied!";
-    setTimeout(() => (shareBtn.textContent = "Copy Share Link"), 1500);
+  // Populate part dropdown
+  partSelect.innerHTML = "";
+  sg.materials.forEach(mat => {
+    const opt = document.createElement("option");
+    opt.value = mat.name;
+    opt.textContent = mat.name;
+    partSelect.appendChild(opt);
   });
 });
+
+// ---- APPLY COLOR ----
+function applyColor(hex) {
+  const matName = partSelect.value;
+  if (!matName) return;
+
+  const mat = mv.sceneGraph.materials.find(m => m.name === matName);
+  if (!mat) return;
+
+  const rgb = hexToRGBA(hex);
+  mat.pbrMetallicRoughness.setBaseColorFactor(rgb);
+}
+
+// ---- SHARE LINK ----
+shareBtn.onclick = () => {
+  navigator.clipboard.writeText(window.location.href);
+  shareBtn.textContent = "Copied!";
+  setTimeout(() => (shareBtn.textContent = "Copy Share Link"), 1500);
+};
+
+// ---- HELPERS ----
+function hexToRGBA(hex) {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.slice(0, 2), 16) / 255,
+    parseInt(h.slice(2, 4), 16) / 255,
+    parseInt(h.slice(4, 6), 16) / 255,
+    1,
+  ];
+}
