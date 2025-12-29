@@ -4,10 +4,6 @@ const paletteEl = document.getElementById("palette");
 const customColor = document.getElementById("customColor");
 const shareBtn = document.getElementById("share");
 
-const selections = {};
-const PALETTE = ["#ff0000", "#00ff00", "#0000ff", "#ffffff", "#000000"];
-
-// ---- Load GLB from URL ----
 const params = new URLSearchParams(window.location.search);
 const glbUrl = params.get("glb");
 
@@ -15,110 +11,73 @@ if (glbUrl) {
   mv.src = glbUrl;
 }
 
-// ---- When model loads ----
-mv.addEventListener("load", async () => {
-  await mv.updateComplete;
+const selections = {};
+const COLORS = ["#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff"];
 
-  const scene = mv.sceneGraph?.model;
-  if (!scene) {
-    console.error("SceneGraph missing");
-    return;
-  }
+function hexToRGBA(hex) {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.substring(0,2),16)/255,
+    parseInt(h.substring(2,4),16)/255,
+    parseInt(h.substring(4,6),16)/255,
+    1
+  ];
+}
 
-  // Collect named nodes
-  const nodes = [];
-  scene.traverse((obj) => {
-    if (obj.isMesh && obj.name) {
-      nodes.push(obj);
-    }
-  });
-
-  if (!nodes.length) {
-    partSelect.innerHTML = `<option>No parts found</option>`;
+mv.addEventListener("load", () => {
+  if (!mv.model || !mv.model.materials) {
+    console.error("Model materials not available");
     return;
   }
 
   partSelect.innerHTML = "";
-  nodes.forEach((n) => {
+
+  mv.model.materials.forEach(mat => {
+    const name = mat.name || "Unnamed";
     const opt = document.createElement("option");
-    opt.value = n.name;
-    opt.textContent = n.name;
+    opt.value = name;
+    opt.textContent = name;
     partSelect.appendChild(opt);
   });
 
-  buildPalette(nodes);
-  applyFromURL(nodes);
+  buildPalette();
 });
 
-// ---- Palette UI ----
-function buildPalette(nodes) {
+function buildPalette() {
   paletteEl.innerHTML = "";
-
-  PALETTE.forEach((hex) => {
+  COLORS.forEach(hex => {
     const btn = document.createElement("button");
     btn.style.background = hex;
-    btn.style.width = "28px";
-    btn.style.height = "28px";
+    btn.style.width = "30px";
+    btn.style.height = "30px";
     btn.style.margin = "4px";
-    btn.onclick = () => applyColor(nodes, hex);
+    btn.onclick = () => applyColor(hex);
     paletteEl.appendChild(btn);
   });
-
-  customColor.addEventListener("input", () =>
-    applyColor(nodes, customColor.value)
-  );
 }
 
-// ---- Apply color to selected node ----
-function applyColor(nodes, hex) {
-  const name = partSelect.value;
-  const node = nodes.find((n) => n.name === name);
-  if (!node) return;
+function applyColor(hex) {
+  const part = partSelect.value;
+  if (!part) return;
 
-  const [r, g, b] = hexToRgb(hex);
+  const mat = mv.model.materials.find(m => m.name === part);
+  if (!mat) return;
 
-  node.material.pbrMetallicRoughness.setBaseColorFactor([r, g, b, 1]);
-  selections[name] = hex;
+  mat.pbrMetallicRoughness.setBaseColorFactor(hexToRGBA(hex));
+  selections[part] = hex;
 }
 
-// ---- Share link ----
-shareBtn.onclick = () => {
+customColor.addEventListener("input", e => {
+  applyColor(e.target.value);
+});
+
+shareBtn.addEventListener("click", () => {
   const url = new URL(window.location.href);
-  url.searchParams.set(
-    "parts",
-    Object.entries(selections)
-      .map(([k, v]) => `${k}:${v.replace("#", "")}`)
-      .join(",")
-  );
+  const parts = Object.entries(selections)
+    .map(([k,v]) => `${encodeURIComponent(k)}:${v.replace("#","")}`)
+    .join(",");
+  if (parts) url.searchParams.set("parts", parts);
   navigator.clipboard.writeText(url.toString());
-  alert("Link copied");
-};
-
-// ---- Restore state ----
-function applyFromURL(nodes) {
-  const parts = params.get("parts");
-  if (!parts) return;
-
-  parts.split(",").forEach((p) => {
-    const [name, hex] = p.split(":");
-    const node = nodes.find((n) => n.name === name);
-    if (!node) return;
-
-    const color = "#" + hex;
-    const [r, g, b] = hexToRgb(color);
-    node.material.pbrMetallicRoughness.setBaseColorFactor([r, g, b, 1]);
-    selections[name] = color;
-  });
-}
-
-// ---- Utils ----
-function hexToRgb(hex) {
-  const h = hex.replace("#", "");
-  return [
-    parseInt(h.slice(0, 2), 16) / 255,
-    parseInt(h.slice(2, 4), 16) / 255,
-    parseInt(h.slice(4, 6), 16) / 255,
-  ];
-}
-
+  shareBtn.textContent = "Copied!";
+});
 
