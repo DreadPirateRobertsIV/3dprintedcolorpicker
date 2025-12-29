@@ -81,3 +81,26 @@ shareBtn.addEventListener("click", () => {
   shareBtn.textContent = "Copied!";
 });
 
+const mv = document.getElementById('mv');
+
+mv.addEventListener('model-visibility', () => {
+  console.log('=== MODEL READY ===');
+
+  const model = mv.model;
+  if (!model) {
+    console.error('No mv.model');
+    return;
+  }
+
+  console.log('Materials:', model.materials);
+  console.log('Material names:');
+  model.materials.forEach((m, i) => {
+    console.log(i, m.name, typeof m.name);
+  });
+
+  console.log('Meshes:');
+  model.meshes?.forEach((mesh, i) => {
+    console.log(i, mesh.name);
+  });
+});
+
