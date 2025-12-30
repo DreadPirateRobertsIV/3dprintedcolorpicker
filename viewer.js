@@ -1,103 +1,84 @@
-const mv = document.getElementById("mv");
-const partSelect = document.getElementById("partSelect");
-const paletteEl = document.getElementById("palette");
-const customColor = document.getElementById("customColor");
-const shareBtn = document.getElementById("share");
+const canvas = document.getElementById('viewer');
+const partSelect = document.getElementById('partSelect');
+const palette = document.getElementById('palette');
+const customColor = document.getElementById('customColor');
+const shareBtn = document.getElementById('share');
 
-/* ---------- Load GLB from URL ---------- */
 const params = new URLSearchParams(window.location.search);
-const glbUrl = params.get("glb");
+const glbUrl = params.get('glb');
+const partsParam = params.get('parts');
 
-if (glbUrl) {
-  mv.src = glbUrl;
-} else {
-  console.warn("No ?glb= parameter found");
-}
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf2f2f2);
 
-/* ---------- Palette ---------- */
-const DEFAULT_COLORS = ["#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff"];
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / 420, 0.1, 100);
+camera.position.set(0, 1.2, 2.5);
 
-buildPalette(DEFAULT_COLORS);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(window.innerWidth, 420);
 
-/* ---------- SceneGraph READY ---------- */
-mv.addEventListener("scene-graph-ready", () => {
-  console.log("SceneGraph ready ✅");
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true;
 
-  const sg = mv.sceneGraph;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(3, 5, 3);
+scene.add(dir);
 
-  if (!sg || !sg.materials || sg.materials.length === 0) {
-    console.error("No materials detected in SceneGraph", sg);
-    return;
-  }
+const loader = new THREE.GLTFLoader();
 
-  console.log(
-    "Detected materials:",
-    sg.materials.map(m => m.name)
-  );
+const materials = {}; // name → material
 
-  // Populate dropdown
-  partSelect.innerHTML = "";
-  sg.materials.forEach(mat => {
-    if (!mat.name) return;
-    const opt = document.createElement("option");
-    opt.value = mat.name;
-    opt.textContent = mat.name;
+loader.load(glbUrl, (gltf) => {
+  scene.add(gltf.scene);
+
+  gltf.scene.traverse(obj => {
+    if (obj.isMesh && obj.material) {
+      const mat = obj.material;
+      const name = mat.name || obj.name;
+      if (!materials[name]) {
+        materials[name] = mat;
+      }
+    }
+  });
+
+  buildPartList();
+});
+
+function buildPartList() {
+  partSelect.innerHTML = '';
+  Object.keys(materials).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
     partSelect.appendChild(opt);
   });
-});
+}
 
-/* ---------- Apply Color ---------- */
-paletteEl.addEventListener("click", e => {
-  const swatch = e.target.closest(".swatch");
-  if (!swatch) return;
-
-  const color = swatch.dataset.color;
-  const part = partSelect.value;
-  if (!part) return;
-
-  applyColor(part, color);
-});
-
-customColor.addEventListener("input", e => {
-  const part = partSelect.value;
-  if (!part) return;
-  applyColor(part, e.target.value);
-});
-
-function applyColor(materialName, hex) {
-  const mat = mv.sceneGraph.materials.find(m => m.name === materialName);
+function applyColor(hex) {
+  const mat = materials[partSelect.value];
   if (!mat) return;
-
-  const rgba = hexToRgba(hex);
-  mat.pbrMetallicRoughness.setBaseColorFactor(rgba);
+  mat.color.set(hex);
 }
 
-/* ---------- Helpers ---------- */
-function buildPalette(colors) {
-  paletteEl.innerHTML = "";
-  colors.forEach(c => {
-    const b = document.createElement("button");
-    b.className = "swatch";
-    b.style.background = c;
-    b.dataset.color = c;
-    paletteEl.appendChild(b);
-  });
-}
-
-function hexToRgba(hex) {
-  const h = hex.replace("#", "");
-  return [
-    parseInt(h.slice(0, 2), 16) / 255,
-    parseInt(h.slice(2, 4), 16) / 255,
-    parseInt(h.slice(4, 6), 16) / 255,
-    1
-  ];
-}
-
-/* ---------- Share Link ---------- */
-shareBtn.addEventListener("click", () => {
-  navigator.clipboard.writeText(window.location.href);
-  shareBtn.textContent = "Copied!";
-  setTimeout(() => (shareBtn.textContent = "Copy Share Link"), 1200);
+palette.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  applyColor(btn.dataset.color);
 });
+
+customColor.addEventListener('input', e => applyColor(e.target.value));
+
+shareBtn.addEventListener('click', () => {
+  const url = new URL(location.href);
+  navigator.clipboard.writeText(url.toString());
+  alert('Link copied!');
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
 
