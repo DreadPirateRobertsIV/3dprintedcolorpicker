@@ -2,28 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Dynamic 3D Builder</title>
+  <title>3D Color Picker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Three.js -->
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 
 <h1>3D Part Builder</h1>
 
-<model-viewer
-  id="mv"
-  camera-controls
-  shadow-intensity="1"
-  tone-mapping="neutral"
-  style="width:100%; height:420px;"
-></model-viewer>
+<canvas id="viewer"></canvas>
 
 <div class="controls">
   <select id="partSelect"></select>
-  <div id="palette"></div>
-  <input type="color" id="customColor" />
+
+  <div id="palette">
+    <button data-color="#000000"></button>
+    <button data-color="#ffffff"></button>
+    <button data-color="#ff0000"></button>
+    <button data-color="#00ff00"></button>
+    <button data-color="#0000ff"></button>
+  </div>
+
+  <input type="color" id="customColor">
 </div>
 
 <button id="share">Copy Share Link</button>
@@ -31,3 +37,4 @@
 <script src="viewer.js"></script>
 </body>
 </html>
+
