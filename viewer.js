@@ -1,83 +1,103 @@
-const mv = document.getElementById("mv");
-const partSelect = document.getElementById("partSelect");
-const paletteEl = document.getElementById("palette");
-const customColor = document.getElementById("customColor");
-const shareBtn = document.getElementById("share");
+window.addEventListener("DOMContentLoaded", () => {
+  const mv = document.getElementById("mv");
+  const partSelect = document.getElementById("partSelect");
+  const paletteEl = document.getElementById("palette");
+  const customColor = document.getElementById("customColor");
+  const shareBtn = document.getElementById("share");
 
-const params = new URLSearchParams(window.location.search);
-const glbUrl = params.get("glb");
-
-if (glbUrl) {
-  mv.src = glbUrl;
-}
-
-const selections = {};
-const COLORS = ["#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff"];
-
-function hexToRGBA(hex) {
-  const h = hex.replace("#", "");
-  return [
-    parseInt(h.substring(0,2),16)/255,
-    parseInt(h.substring(2,4),16)/255,
-    parseInt(h.substring(4,6),16)/255,
-    1
-  ];
-}
-
-mv.addEventListener("load", () => {
-  if (!mv.model || !mv.model.materials) {
-    console.error("Model materials not available");
+  if (!mv || !partSelect || !paletteEl) {
+    console.error("Viewer elements missing from DOM");
     return;
   }
 
-  partSelect.innerHTML = "";
+  // --- Load GLB from URL ---
+  const params = new URLSearchParams(window.location.search);
+  const glbUrl = params.get("glb");
 
-  mv.model.materials.forEach(mat => {
-    const name = mat.name || "Unnamed";
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    partSelect.appendChild(opt);
-  });
+  if (glbUrl) {
+    mv.src = glbUrl;
+  } else {
+    console.warn("No ?glb= param provided");
+  }
+
+  const selections = {};
+
+  // --- Default palette ---
+  const palette = [
+    "#000000",
+    "#ffffff",
+    "#ff0000",
+    "#00ff00",
+    "#0000ff"
+  ];
 
   buildPalette();
-});
 
-function buildPalette() {
-  paletteEl.innerHTML = "";
-  COLORS.forEach(hex => {
-    const btn = document.createElement("button");
-    btn.style.background = hex;
-    btn.style.width = "30px";
-    btn.style.height = "30px";
-    btn.style.margin = "4px";
-    btn.onclick = () => applyColor(hex);
-    paletteEl.appendChild(btn);
+  function buildPalette() {
+    paletteEl.innerHTML = "";
+    palette.forEach(hex => {
+      const swatch = document.createElement("button");
+      swatch.style.background = hex;
+      swatch.className = "swatch";
+      swatch.onclick = () => {
+        const part = partSelect.value;
+        if (part) applyColor(part, hex);
+      };
+      paletteEl.appendChild(swatch);
+    });
+  }
+
+  // --- When model loads ---
+  mv.addEventListener("load", async () => {
+    await mv.updateComplete;
+
+    const sg = mv.sceneGraph;
+    if (!sg || !sg.materials || sg.materials.length === 0) {
+      console.error("No materials detected in SceneGraph", sg);
+      return;
+    }
+
+    console.log("Materials detected:", sg.materials);
+
+    partSelect.innerHTML = "";
+    sg.materials.forEach(mat => {
+      const opt = document.createElement("option");
+      opt.value = mat.name;
+      opt.textContent = mat.name;
+      partSelect.appendChild(opt);
+    });
   });
-}
 
-function applyColor(hex) {
-  const part = partSelect.value;
-  if (!part) return;
+  function applyColor(materialName, hex) {
+    const mat = mv.sceneGraph.materials.find(m => m.name === materialName);
+    if (!mat) return;
 
-  const mat = mv.model.materials.find(m => m.name === part);
-  if (!mat) return;
+    const rgba = hexToRgba(hex);
+    mat.pbrMetallicRoughness.setBaseColorFactor(rgba);
+    selections[materialName] = hex;
+  }
 
-  mat.pbrMetallicRoughness.setBaseColorFactor(hexToRGBA(hex));
-  selections[part] = hex;
-}
+  function hexToRgba(hex) {
+    const h = hex.replace("#", "");
+    return [
+      parseInt(h.slice(0, 2), 16) / 255,
+      parseInt(h.slice(2, 4), 16) / 255,
+      parseInt(h.slice(4, 6), 16) / 255,
+      1
+    ];
+  }
 
-customColor.addEventListener("input", e => {
-  applyColor(e.target.value);
+  // --- Share link ---
+  shareBtn?.addEventListener("click", () => {
+    const url = new URL(window.location.href);
+    const parts = Object.entries(selections)
+      .map(([k, v]) => `${encodeURIComponent(k)}:${v.replace("#", "")}`)
+      .join(",");
+
+    url.searchParams.set("glb", mv.src);
+    if (parts) url.searchParams.set("parts", parts);
+
+    navigator.clipboard.writeText(url.toString());
+    alert("Share link copied!");
+  });
 });
-
-shareBtn.addEventListener("click", () => {
-  const url = new URL(window.location.href);
-  const parts = Object.entries(selections)
-    .map(([k,v]) => `${encodeURIComponent(k)}:${v.replace("#","")}`)
-    .join(",");
-  if (parts) url.searchParams.set("parts", parts);
-  navigator.clipboard.writeText(url.toString());
-  shareBtn.textContent = "Copied!";
-});
-
