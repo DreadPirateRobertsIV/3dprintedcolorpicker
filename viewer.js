@@ -1,83 +1,60 @@
-const canvas = document.getElementById('viewer');
-const partSelect = document.getElementById('partSelect');
-const palette = document.getElementById('palette');
-const customColor = document.getElementById('customColor');
-const shareBtn = document.getElementById('share');
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { GLTFLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
 
-const params = new URLSearchParams(window.location.search);
-const glbUrl = params.get('glb');
-const partsParam = params.get('parts');
+const container = document.getElementById("viewer");
+const select = document.getElementById("partSelect");
+const colorInput = document.getElementById("colorPicker");
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf2f2f2);
+scene.background = new THREE.Color(0xf5f5f5);
 
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / 420, 0.1, 100);
-camera.position.set(0, 1.2, 2.5);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / 400, 0.1, 100);
+camera.position.set(0, 1.5, 3);
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setSize(window.innerWidth, 420);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, 400);
+container.appendChild(renderer.domElement);
 
-const controls = new THREE.OrbitControls(camera, canvas);
-controls.enableDamping = true;
+const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+scene.add(light);
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
-const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-dir.position.set(3, 5, 3);
-scene.add(dir);
+const loader = new GLTFLoader();
 
-const loader = new THREE.GLTFLoader();
+// 🔴 REPLACE THIS WITH ANY GLB URL (Shopify CDN later)
+const GLB_URL = "https://threejs.org/examples/models/gltf/DamagedHelmet/glTF-Binary/DamagedHelmet.glb";
 
-const materials = {}; // name → material
+const parts = {};
 
-loader.load(glbUrl, (gltf) => {
+loader.load(GLB_URL, (gltf) => {
   scene.add(gltf.scene);
 
   gltf.scene.traverse(obj => {
     if (obj.isMesh && obj.material) {
-      const mat = obj.material;
-      const name = mat.name || obj.name;
-      if (!materials[name]) {
-        materials[name] = mat;
+      const name = obj.material.name || obj.name;
+      if (!parts[name]) {
+        parts[name] = obj.material;
       }
     }
   });
 
-  buildPartList();
-});
+  console.log("Detected parts:", Object.keys(parts));
 
-function buildPartList() {
-  partSelect.innerHTML = '';
-  Object.keys(materials).forEach(name => {
-    const opt = document.createElement('option');
+  Object.keys(parts).forEach(name => {
+    const opt = document.createElement("option");
     opt.value = name;
     opt.textContent = name;
-    partSelect.appendChild(opt);
+    select.appendChild(opt);
   });
-}
-
-function applyColor(hex) {
-  const mat = materials[partSelect.value];
-  if (!mat) return;
-  mat.color.set(hex);
-}
-
-palette.addEventListener('click', e => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  applyColor(btn.dataset.color);
 });
 
-customColor.addEventListener('input', e => applyColor(e.target.value));
-
-shareBtn.addEventListener('click', () => {
-  const url = new URL(location.href);
-  navigator.clipboard.writeText(url.toString());
-  alert('Link copied!');
+colorInput.addEventListener("input", () => {
+  const mat = parts[select.value];
+  if (!mat) return;
+  mat.color.set(colorInput.value);
 });
 
 function animate() {
   requestAnimationFrame(animate);
-  controls.update();
   renderer.render(scene, camera);
 }
 animate();
