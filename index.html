@@ -2,39 +2,114 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>3D Color Picker</title>
+  <title>Three.js GLB Material Test</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <link rel="stylesheet" href="style.css" />
-
-  <!-- Three.js -->
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    body { margin: 0; font-family: system-ui; }
+    #ui {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      z-index: 10;
+      max-width: 300px;
+    }
+    select { width: 100%; margin-bottom: 8px; }
+  </style>
 </head>
 <body>
 
-<h1>3D Part Builder</h1>
-
-<canvas id="viewer"></canvas>
-
-<div class="controls">
+<div id="ui">
+  <strong>Parts</strong>
   <select id="partSelect"></select>
-
-  <div id="palette">
-    <button data-color="#000000"></button>
-    <button data-color="#ffffff"></button>
-    <button data-color="#ff0000"></button>
-    <button data-color="#00ff00"></button>
-    <button data-color="#0000ff"></button>
-  </div>
-
-  <input type="color" id="customColor">
+  <input type="color" id="colorPicker" value="#ff0000" />
 </div>
 
-<button id="share">Copy Share Link</button>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
 
-<script src="viewer.js"></script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf4f4f5);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(2, 2, 2);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+dir.position.set(5, 10, 7);
+scene.add(dir);
+
+const loader = new GLTFLoader();
+
+// 🔴 REPLACE THIS WITH YOUR SHOPIFY FILE URL
+const GLB_URL = "PASTE_YOUR_SHOPIFY_GLb_URL_HERE";
+
+const materials = {};
+
+loader.load(GLB_URL, gltf => {
+  gltf.scene.traverse(obj => {
+    if (obj.isMesh && obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(mat => {
+        if (!materials[mat.name]) {
+          materials[mat.name] = mat;
+        }
+      });
+    }
+  });
+
+  scene.add(gltf.scene);
+  buildUI();
+});
+
+function buildUI() {
+  const select = document.getElementById("partSelect");
+  select.innerHTML = "";
+
+  Object.keys(materials).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  });
+
+  console.log("Detected materials:", Object.keys(materials));
+}
+
+document.getElementById("colorPicker").addEventListener("input", e => {
+  const mat = materials[partSelect.value];
+  if (mat && mat.color) {
+    mat.color.set(e.target.value);
+  }
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+
 </body>
 </html>
+
 
